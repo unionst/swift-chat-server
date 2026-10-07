@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "framework": null,
+  "buildCommand": "node scripts/migrate.mjs",
+  "outputDirectory": "public",
+  "functions": {
+    "api/main.ts": {
+      "maxDuration": 60
+    },
+    "api/live.ts": {
+      "maxDuration": 300,
+      "supportsCancellation": true
+    }
+  },
+  "rewrites": [
+    { "source": "/v1/stream", "destination": "/api/live" },
+    { "source": "/v1/:path*", "destination": "/api/main" },
+    { "source": "/admin/:path*", "destination": "/api/main" }
+  ]
+}

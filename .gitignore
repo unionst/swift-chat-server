@@ -1,0 +1,9 @@
+node_modules
+.env*
+.vercel
+.build
+.swiftpm
+*.xcodeproj
+xcuserdata
+DerivedData
+.env*.local
