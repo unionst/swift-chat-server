@@ -3,7 +3,7 @@ node_modules
 .vercel
 .build
 .swiftpm
-*.xcodeproj
+Examples/**/*.xcodeproj
 xcuserdata
 DerivedData
 .env*.local

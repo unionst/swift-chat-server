@@ -526,11 +526,11 @@ public final class ChatClient {
                 let file = cache.attachments.appending(path: "\(clientID)-\(index)-\(name)")
                 guard (try? FileManager.default.copyItem(at: url, to: file)) != nil else { continue }
                 local.append(ChatMedia(url: file, kind: .file, name: name, size: size.map(Int.init)))
-            case .video(let url, _, _):
-                let file = cache.attachments.appending(path: "\(clientID)-\(index).\(url.pathExtension.isEmpty ? "mov" : url.pathExtension)")
+            case .video(let url, _, _), .audio(let url, _, _):
+                let file = cache.attachments.appending(path: "\(clientID)-\(index).\(url.pathExtension.isEmpty ? "bin" : url.pathExtension)")
                 guard (try? FileManager.default.copyItem(at: url, to: file)) != nil else { continue }
                 local.append(ChatMedia(url: file, kind: .file, name: url.lastPathComponent))
-            @unknown default:
+            default:
                 continue
             }
         }

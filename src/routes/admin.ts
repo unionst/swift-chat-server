@@ -53,7 +53,8 @@ admin.post("/users", async (c) => {
 });
 
 admin.post("/users/:id/token", async (c) => {
-  const user = (await usersByIds([c.req.param("id")]))[0];
+  const id = c.req.param("id");
+  const user = (await usersByIds([id]))[0] ?? (await usersByExternalIds([id]))[0];
   if (!user) fail(404, "user_not_found", "No user with that id.");
   const lifetime = Number((await bodyOf(c)).token_lifetime_seconds);
   return c.json({ token: issueToken(user.id, Number.isFinite(lifetime) && lifetime > 0 ? lifetime : undefined) });
@@ -64,6 +65,13 @@ admin.get("/users/:id", async (c) => {
   const user = (await usersByIds([id]))[0] ?? (await usersByExternalIds([id]))[0];
   if (!user) fail(404, "user_not_found", "No user with that id.");
   return c.json({ user: userJson(user) });
+});
+
+admin.get("/users/:id/conversations", async (c) => {
+  const id = c.req.param("id");
+  const user = (await usersByIds([id]))[0] ?? (await usersByExternalIds([id]))[0];
+  if (!user) fail(404, "user_not_found", "No user with that id.");
+  return c.json({ conversations: await conversationsFor(user.id) });
 });
 
 admin.delete("/users/:id", async (c) => {
