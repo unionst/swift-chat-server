@@ -18,7 +18,7 @@ function guarded(app: Hono<Env>): Hono<Env> {
 }
 
 export const mainApp = guarded(new Hono<Env>());
-mainApp.get("/v1", (c) => c.json({ name: "swift-chat-server", version: "0.1.0", docs: "https://github.com/unionst/swift-chat-server" }));
+mainApp.get("/v1", (c) => c.json({ name: "swift-chat-server", version: "0.1.0", docs: "https://unionst.com/swiftchat/server" }));
 mainApp.route("/v1", users);
 mainApp.route("/v1", conversations);
 mainApp.route("/v1", uploads);

@@ -4,7 +4,7 @@
 
 The backend for [Swift Chat](https://github.com/unionst/swift-chat), on your own Vercel and Postgres.
 
-[Deploy](#deploy-in-five-minutes) · [Swift client](#the-swift-client) · [API reference](public/llms.txt) · by [Union St](https://unionst.com)
+[unionst.com/swiftchat/server](https://unionst.com/swiftchat/server) · [Deploy](#deploy-in-five-minutes) · [Swift client](#the-swift-client) · [API reference](public/llms.txt) · by [Union St](https://unionst.com)
 
 </div>
 
