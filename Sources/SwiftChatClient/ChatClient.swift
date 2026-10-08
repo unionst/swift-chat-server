@@ -105,11 +105,13 @@ public final class ChatClient {
         let text: String
         let media: [ChatMedia]
         let clientID: String
+        let data: [String: JSONValue]
 
         enum CodingKeys: String, CodingKey {
             case text
             case media
             case clientID = "client_id"
+            case data
         }
     }
 
@@ -508,9 +510,9 @@ public final class ChatClient {
         return page.hasMore
     }
 
-    public func send(text: String?, media: [MessageMedia] = [], in id: String) async {
+    public func send(text: String?, media: [MessageMedia] = [], data: [String: JSONValue] = [:], in id: String) async {
         let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || !media.isEmpty, let me else { return }
+        guard !trimmed.isEmpty || !media.isEmpty || !data.isEmpty, let me else { return }
 
         let clientID = UUID().uuidString.lowercased()
         var local: [ChatMedia] = []
@@ -534,7 +536,7 @@ public final class ChatClient {
                 continue
             }
         }
-        guard !trimmed.isEmpty || !local.isEmpty else { return }
+        guard !trimmed.isEmpty || !local.isEmpty || !data.isEmpty else { return }
 
         endOutgoingTyping()
         let newest = max(conversation(id)?.lastSeq ?? 0, threads[id]?.map(\.seq).max() ?? 0)
@@ -548,6 +550,7 @@ public final class ChatClient {
             media: local,
             createdAt: .now,
             reactions: [],
+            data: data,
             delivery: .sending
         )
         localMedia[clientID] = local
@@ -588,7 +591,7 @@ public final class ChatClient {
             let sent: SentPayload = try await api.send(
                 "POST",
                 "v1/conversations/\(id)/messages",
-                body: OutgoingMessage(text: pending.text, media: remote, clientID: clientID)
+                body: OutgoingMessage(text: pending.text, media: remote, clientID: clientID, data: pending.data)
             )
             merge([sent.message], into: id)
             if let conversation = sent.conversation {

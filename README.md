@@ -34,6 +34,7 @@ That view is a live thread: bubbles, tails, typing dots, “Delivered” fading 
 - **Live.** One Server-Sent Events stream per user, woken by Postgres `LISTEN/NOTIFY`, resumed from a cursor. A dropped connection costs latency, not messages.
 - **Receipts.** Delivered when the message reaches a device (its stream or its push), read when the person opens the thread.
 - **Typing**, **tapbacks** (per message part, so a photo with a caption has two), **attachments** on Vercel Blob, **push** over APNs with unread badges.
+- **Your own payloads.** Every message carries a `data` object (up to 16 KB) for cards and app-specific content the transcript renders itself.
 - **A Swift client** that does the hard part on the phone: optimistic bubbles that become the stored row without flicker, idempotent resends, a cached inbox, reconnect with backoff.
 - **An admin API** so your backend can create users, mint tokens, open conversations and speak into them.
 

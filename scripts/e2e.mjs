@@ -184,6 +184,12 @@ const asBob = await call("POST", `/admin/conversations/${dmId}/messages`, { toke
 check("admin posts as Bob", asBob.json.message.sender_id === bobId);
 const adminRead = await call("GET", `/admin/conversations/${dmId}/messages?limit=2`, { token: SECRET });
 check("admin reads messages", adminRead.json.messages.length === 2);
+const card = await call("POST", `/v1/conversations/${dmId}/messages`, { token: A, body: { data: { type: "track", id: "t_1", preview: "Shared a track" } } });
+check("a data-only message is accepted and round-trips", card.status === 200 && card.json.message.data.type === "track" && card.json.message.text === "");
+const backdated = await call("POST", `/admin/conversations/${dmId}/messages`, { token: SECRET, body: { sender_external_id: `bob-${run}`, text: "from the archive", created_at: "2026-01-02T03:04:05.000Z" } });
+check("admin can backdate an imported message", backdated.status === 200 && backdated.json.message.created_at.startsWith("2026-01-02"));
+const tooBig = await call("POST", `/v1/conversations/${dmId}/messages`, { token: A, body: { data: { blob: "x".repeat(17000) } } });
+check("oversized data is refused", tooBig.status === 413);
 
 const upload = await call("POST", "/v1/uploads", { token: A, raw: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]), headers: { "Content-Type": "image/jpeg" } });
 check("upload answers (needs Blob to succeed)", upload.status === 200 || upload.status === 503, `status ${upload.status} ${upload.json.code ?? ""}`);

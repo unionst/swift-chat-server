@@ -17,7 +17,7 @@ import {
   type ParticipantRow,
 } from "../lib/chat.js";
 import { db } from "../lib/db.js";
-import { bodyOf, fail, httpsUrl, mediaOf, optionalText, stringList, textOf, userFrom, type Env } from "../lib/http.js";
+import { bodyOf, dataOf, fail, httpsUrl, mediaOf, optionalText, stringList, textOf, userFrom, type Env } from "../lib/http.js";
 import { pushMessage } from "../lib/push.js";
 import { signalUsers } from "../lib/signal.js";
 
@@ -132,9 +132,10 @@ conversations.post("/conversations/:id/messages", async (c) => {
   const body = await bodyOf(c);
   const text = textOf(body.text, 8_000);
   const media = mediaOf(body.media, "ours");
-  if (!text && media.length === 0) fail(400, "empty_message", "A message needs text or an attachment.");
+  const data = dataOf(body.data);
+  if (!text && media.length === 0 && Object.keys(data).length === 0) fail(400, "empty_message", "A message needs text, an attachment, or data.");
   const clientId = typeof body.client_id === "string" ? body.client_id.slice(0, 64) : null;
-  const posted = await postMessage({ conversationId: id, senderId: user.id, text, media, clientId });
+  const posted = await postMessage({ conversationId: id, senderId: user.id, text, media, clientId, data });
   if (!posted) fail(404, "conversation_not_found", "That conversation is gone.");
   if (posted.fresh) {
     waitUntil(signalUsers(posted.members));

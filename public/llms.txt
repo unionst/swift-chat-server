@@ -1,0 +1,190 @@
+# Swift Chat Server
+
+The backend for Swift Chat (https://unionst.com/swiftchat), deployed to your own Vercel account with your own Postgres and Blob store. Source and setup: https://github.com/unionst/swift-chat-server. Swift client: product `SwiftChatClient` from the same repository. This file is the complete API reference and is served from every deployment at /llms.txt.
+
+## Concepts
+
+- A **user** has an `id` (ours, `usr_…`) and an `external_id` (yours). Your backend creates users and mints their tokens through the admin API; the app never sees the server secret.
+- A **conversation** has participants. One with no name and exactly two members is **direct** and is found again by the pair (`direct: true`). Any other is a group: it can be named, given a photo, and people can be added or can leave.
+- A **message** has a per-conversation `seq` (1, 2, 3…), `text`, `media` (attachments uploaded to Blob), `data` (any JSON you want to carry, up to 16 KB, for cards and app-specific payloads), an optional `client_id` for idempotent sends, and `reactions`.
+- Each participant has `read_seq` and `delivered_seq`. Your bubble is Delivered when every other participant's `delivered_seq` ≥ its seq, Read when every `read_seq` is.
+- Each user has an **event log** ordered by `event_seq`. The stream replays it from a cursor, so nothing is missed across reconnects.
+
+## Authentication
+
+- User routes (`/v1/*`): `Authorization: Bearer <user token>`. Tokens are minted by `POST /admin/users` or `POST /admin/users/:id/token`, or by `POST /v1/users/anonymous` when `ALLOW_ANONYMOUS_USERS=1`.
+- Admin routes (`/admin/*`): `Authorization: Bearer <SWIFT_CHAT_SECRET>`.
+- Errors are JSON: `{"error": "<sentence for a person>", "code": "<snake_case>"}` with a 4xx/5xx status.
+
+## Objects
+
+User
+```
+{"id": "usr_…", "external_id": "user_42", "name": "Alice", "avatar_url": "https://…" | null}
+```
+
+Message
+```
+{"id": "msg_…", "conversation_id": "cnv_…", "seq": 12, "sender_id": "usr_…" | null,
+ "text": "hey", "media": [Media], "client_id": "…" | null, "data": {…},
+ "created_at": "2026-10-07T20:15:00.000Z",
+ "reactions": [{"user_id": "usr_…", "emoji": "❤️", "part": "message" | "media"}]}
+```
+A `sender_id` of null is a system message.
+
+Media
+```
+{"url": "https://….public.blob.vercel-storage.com/…", "kind": "image" | "file",
+ "name": "…", "size": 12345, "width": 1600, "height": 1200}
+```
+`name`, `size`, `width`, `height` are optional. Only URLs on your Blob store are accepted from users unless `ALLOW_EXTERNAL_MEDIA=1`; the admin API accepts any https URL.
+
+Conversation (as seen by the requesting user)
+```
+{"id": "cnv_…", "name": "The Crew" | null, "photo_url": "https://…" | null, "direct": false,
+ "created_at": "…", "last_seq": 40, "last_message_at": "…", "last_message": Message | null,
+ "unread": 3,
+ "me": {"read_seq": 37, "delivered_seq": 40, "muted": false},
+ "participants": [{"user": User, "read_seq": 40, "delivered_seq": 40, "typing": false, "joined_at": "…"}]}
+```
+
+## User API (/v1)
+
+GET /v1
+Health. `{"name": "swift-chat-server", "version": "…", "docs": "…"}`
+
+POST /v1/users/anonymous
+Only when `ALLOW_ANONYMOUS_USERS=1`. Body `{"name"?: string, "avatar_url"?: string}`. Returns `{"user": User, "token": string}`.
+
+GET /v1/me
+`{"user": User, "event_seq": number}`
+
+PATCH /v1/me
+Body `{"name"?: string | null, "avatar_url"?: string | null}`. Returns `{"user": User}`.
+
+GET /v1/users?q=&ids=&external_ids=
+Directory search (off when `USER_DIRECTORY=0`). `q` matches names; `ids` and `external_ids` are comma-separated. Anonymous users are hidden unless asked for by id. Returns `{"users": [User]}`.
+
+POST /v1/devices
+Body `{"token": "<hex APNs token>", "environment": "production" | "sandbox"}`. Returns `{"ok": true}`.
+
+DELETE /v1/devices/:token
+Returns `{"ok": true}`.
+
+GET /v1/conversations
+`{"event_seq": number, "conversations": [Conversation]}` sorted by `last_message_at` descending. Call this first; `event_seq` is the cursor to start the stream from.
+
+POST /v1/conversations
+Body `{"member_ids"?: [string], "member_external_ids"?: [string], "name"?: string, "photo_url"?: string}`. The caller is always a member. With no name and one other member this finds or creates the direct conversation. Returns `{"conversation": Conversation, "created": boolean}`.
+
+GET /v1/conversations/:id
+`{"conversation": Conversation}`. 404 if the caller is not a member.
+
+PATCH /v1/conversations/:id
+Body `{"name"?: string | null, "photo_url"?: string | null, "muted"?: boolean}`. `muted` is per caller. Naming a direct conversation makes it a group. Returns `{"conversation": Conversation}`.
+
+POST /v1/conversations/:id/members
+Body `{"member_ids"?: [string], "member_external_ids"?: [string]}`. New members start with `read_seq` and `delivered_seq` at the current end. Returns `{"conversation": Conversation}`.
+
+DELETE /v1/conversations/:id/members/:userId
+Removes a member (`me` for the caller). The last member leaving deletes the conversation. Returns `{"ok": true}`.
+
+DELETE /v1/conversations/:id
+The caller leaves. Returns `{"ok": true}`.
+
+GET /v1/conversations/:id/messages?after_seq=&before_seq=&limit=
+Without parameters: the newest `limit` (default 50, max 200) messages, oldest first. `before_seq` pages older; `after_seq` pages newer. Returns `{"messages": [Message], "has_more": boolean, "conversation": Conversation}`.
+
+POST /v1/conversations/:id/messages
+Body `{"text"?: string, "media"?: [Media], "data"?: object, "client_id"?: string}`. At least one of text, media or data. A repeat with the same `client_id` returns the original message instead of a duplicate. Returns `{"message": Message, "conversation": Conversation}`. Pushes every other participant who is not muted.
+
+POST /v1/conversations/:id/read
+Body `{"seq": number}`. Advances the caller's `read_seq` (never backwards, never past `last_seq`). Returns `{"ok": true}`.
+
+POST /v1/conversations/:id/delivered
+Body `{"seq": number}`. Normally unnecessary: the stream and push mark delivery themselves. Returns `{"ok": true}`.
+
+POST /v1/conversations/:id/typing
+Body `{"typing": boolean}`. Typing holds for 8 seconds; send again every ~5 seconds while typing and `false` when done. Returns `{"ok": true}`.
+
+PUT /v1/conversations/:id/messages/:messageId/reaction
+Body `{"emoji": string | null, "part"?: "message" | "media"}`. One reaction per person per part; null removes it. Returns `{"message_id": string, "reactions": [Reaction]}`.
+
+POST /v1/uploads
+Raw body, `Content-Type` set to the file's type, optional `X-Filename`. Up to 4 MB. Returns `{"url": string}` to use in `media`.
+
+GET /v1/stream?after=<event_seq>
+Server-Sent Events. `after` (or `Last-Event-ID`) is the cursor; `0` replays the whole log (14 days are kept). Events carry `id: <event_seq>` when durable. The stream says `bye` after 270 seconds; reconnect from your cursor.
+- `hello` `{"cursor": number, "user_id": string}`
+- `message` `{"conversation_id": string, "message": Message}`
+- `receipt` `{"conversation_id": string, "user_id": string, "delivered_seq": number, "read_seq": number}`
+- `reaction` `{"conversation_id": string, "message_id": string, "reactions": [Reaction]}`
+- `conversation_updated` `{"conversation_id": string}` — fetch GET /v1/conversations/:id
+- `conversation_removed` `{"conversation_id": string}`
+- `typing` `{"conversation_id": string, "user_id": string, "typing": boolean, "hold_seconds": 8}` (not durable, no id)
+- `ping` `{}` every 15 seconds when idle
+
+## Admin API (/admin)
+
+POST /admin/users
+Body `{"external_id": string, "name"?: string, "avatar_url"?: string, "token_lifetime_seconds"?: number}`. Upserts by `external_id` (name and avatar update when given). Returns `{"user": User, "token": string}`. Tokens last a year by default.
+
+POST /admin/users/:id/token
+`:id` is ours or your `external_id`. Body `{"token_lifetime_seconds"?: number}`. Returns `{"token": string}`.
+
+GET /admin/users/:id
+`{"user": User}`
+
+GET /admin/users/:id/conversations
+`{"conversations": [Conversation]}` from that user's point of view.
+
+DELETE /admin/users/:id
+Removes the user from every conversation and deletes them. Their messages stay with `sender_id: null`.
+
+POST /admin/conversations
+Body `{"member_ids"?: [string], "member_external_ids"?: [string], "name"?: string, "photo_url"?: string}`. Returns `{"conversation": Conversation, "created": boolean}`.
+
+GET /admin/conversations/:id
+`{"conversation": Conversation}`
+
+POST /admin/conversations/:id/members
+Body as above. Returns `{"member_ids": [string]}`.
+
+DELETE /admin/conversations/:id/members/:userId
+Returns `{"ok": true, "member_ids": [string]}`.
+
+GET /admin/conversations/:id/messages?after_seq=&before_seq=&limit=
+`{"messages": [Message], "has_more": boolean}`
+
+POST /admin/conversations/:id/messages
+Body `{"sender_id"?: string, "sender_external_id"?: string, "text"?: string, "media"?: [Media], "data"?: object, "client_id"?: string, "created_at"?: ISO date}`. No sender means a system message. `created_at` backdates a message, for imports. Returns `{"message": Message}`.
+
+POST /admin/conversations/:id/typing
+Body `{"user_id" | "user_external_id", "typing": boolean}`.
+
+POST /admin/conversations/:id/read
+Body `{"user_id" | "user_external_id", "seq": number}`.
+
+## Environment
+
+DATABASE_URL (pooled Postgres), DATABASE_URL_UNPOOLED (direct, for LISTEN), SWIFT_CHAT_SECRET, BLOB_READ_WRITE_TOKEN, ALLOW_ANONYMOUS_USERS, USER_DIRECTORY, ALLOW_EXTERNAL_MEDIA, APNS_TEAM_ID, APNS_KEY_ID, APNS_KEY, APNS_BUNDLE_ID. See the README for what each does.
+
+## Swift client in one screen
+
+```swift
+import SwiftChat
+import SwiftChatClient
+
+let client = ChatClient(baseURL: URL(string: "https://your-deployment.vercel.app")!)
+try await client.signIn(token: tokenFromYourBackend)      // or signInAnonymously(name:)
+
+ConversationView(client: client, conversationID: id)      // a complete thread
+ConversationRow(client: client, conversation: c)          // an inbox row
+
+client.conversations, client.messages(in:), client.typingRoles(in:)
+client.send(text:media:data:in:), client.markRead(_:), client.setTyping(_:in:)
+client.toggleReaction(_:on:part:in:), client.loadOlder(in:)
+client.startConversation(with:externalIDs:name:), client.addMembers(_:to:), client.rename(_:to:), client.setMuted(_:in:), client.leave(_:)
+client.searchUsers(_:), client.registerDevice(token:), client.updateProfile(name:avatarURL:), client.signOut()
+client.transcriptRow(for:lastOutgoingID:in:), client.contextMenuItems(for:in:)   // for a custom transcript
+```

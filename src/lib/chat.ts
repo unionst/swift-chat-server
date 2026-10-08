@@ -56,6 +56,7 @@ export interface MessageRow {
   text: string;
   media: Media[];
   client_id: string | null;
+  data: Record<string, unknown>;
   created_at: Date | string;
 }
 
@@ -73,6 +74,7 @@ export interface MessageJson {
   text: string;
   media: Media[];
   client_id: string | null;
+  data: Record<string, unknown>;
   created_at: string;
   reactions: ReactionJson[];
 }
@@ -122,6 +124,7 @@ export function messageJson(row: MessageRow, reactions: ReactionJson[] = []): Me
     text: row.text,
     media: row.media ?? [],
     client_id: row.client_id,
+    data: row.data ?? {},
     created_at: iso(row.created_at),
     reactions,
   };
@@ -305,7 +308,7 @@ export interface Posted {
   fresh: boolean;
 }
 
-export async function postMessage(input: { conversationId: string; senderId: string | null; text: string; media?: Media[]; clientId?: string | null }): Promise<Posted | null> {
+export async function postMessage(input: { conversationId: string; senderId: string | null; text: string; media?: Media[]; clientId?: string | null; data?: Record<string, unknown>; createdAt?: string | null }): Promise<Posted | null> {
   return transaction(async (tx) => {
     const locked = await tx.one<ConversationRow>("SELECT * FROM conversations WHERE id = $1 FOR UPDATE", [input.conversationId]);
     if (!locked) return null;
@@ -321,14 +324,14 @@ export async function postMessage(input: { conversationId: string; senderId: str
     }
 
     const conversation = await tx.one<ConversationRow>(
-      "UPDATE conversations SET last_seq = last_seq + 1, last_message_at = now() WHERE id = $1 RETURNING *",
-      [input.conversationId],
+      "UPDATE conversations SET last_seq = last_seq + 1, last_message_at = GREATEST(last_message_at, COALESCE($2::timestamptz, now())) WHERE id = $1 RETURNING *",
+      [input.conversationId, input.createdAt ?? null],
     );
     if (!conversation) return null;
     const row = await tx.one<MessageRow>(
-      `INSERT INTO messages (id, conversation_id, seq, sender_id, text, media, client_id)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) RETURNING *`,
-      [newId("msg"), conversation.id, conversation.last_seq, input.senderId, input.text, JSON.stringify(input.media ?? []), input.clientId ?? null],
+      `INSERT INTO messages (id, conversation_id, seq, sender_id, text, media, client_id, data, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, COALESCE($9::timestamptz, now())) RETURNING *`,
+      [newId("msg"), conversation.id, conversation.last_seq, input.senderId, input.text, JSON.stringify(input.media ?? []), input.clientId ?? null, JSON.stringify(input.data ?? {}), input.createdAt ?? null],
     );
     if (!row) throw new Error("message was not stored");
     if (input.senderId) {
@@ -449,6 +452,7 @@ export async function unreadTotal(userId: string): Promise<number> {
 
 export async function previewOf(message: MessageJson): Promise<string> {
   if (message.text) return message.text;
+  if (typeof message.data.preview === "string" && message.data.preview) return message.data.preview;
   const images = message.media.filter((item) => item.kind !== "file").length;
   const files = message.media.length - images;
   if (images > 0 && files === 0) return images > 1 ? `${images} Photos` : "Photo";

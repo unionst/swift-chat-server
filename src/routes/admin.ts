@@ -17,7 +17,7 @@ import {
   type UserRow,
 } from "../lib/chat.js";
 import { db } from "../lib/db.js";
-import { bodyOf, fail, httpsUrl, mediaOf, optionalText, requireAdmin, stringList, textOf, type Env } from "../lib/http.js";
+import { bodyOf, dataOf, fail, httpsUrl, mediaOf, optionalText, requireAdmin, stringList, textOf, type Env } from "../lib/http.js";
 import { pushMessage } from "../lib/push.js";
 import { issueToken } from "../lib/secrets.js";
 import { signalUsers } from "../lib/signal.js";
@@ -139,9 +139,11 @@ admin.post("/conversations/:id/messages", async (c) => {
   if ((body.sender_id !== undefined || body.sender_external_id !== undefined) && !sender) fail(404, "user_not_found", "No such sender.");
   const text = textOf(body.text, 8_000);
   const media = mediaOf(body.media, "any");
-  if (!text && media.length === 0) fail(400, "empty_message", "A message needs text or an attachment.");
+  const data = dataOf(body.data);
+  if (!text && media.length === 0 && Object.keys(data).length === 0) fail(400, "empty_message", "A message needs text, an attachment, or data.");
   const clientId = typeof body.client_id === "string" ? body.client_id.slice(0, 64) : null;
-  const posted = await postMessage({ conversationId: id, senderId: sender?.id ?? null, text, media, clientId });
+  const createdAt = typeof body.created_at === "string" && !Number.isNaN(Date.parse(body.created_at)) ? body.created_at : null;
+  const posted = await postMessage({ conversationId: id, senderId: sender?.id ?? null, text, media, clientId, data, createdAt });
   if (!posted) fail(404, "conversation_not_found", "No conversation with that id.");
   if (posted.fresh) {
     waitUntil(signalUsers(posted.members));

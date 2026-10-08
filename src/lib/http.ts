@@ -63,6 +63,15 @@ export function httpsUrl(value: unknown): string | null {
   }
 }
 
+const MAX_DATA_BYTES = 16 * 1024;
+
+export function dataOf(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const encoded = JSON.stringify(value);
+  if (encoded.length > MAX_DATA_BYTES) fail(413, "data_too_large", "A message’s data can be at most 16 KB.");
+  return value as Record<string, unknown>;
+}
+
 export function mediaOf(value: unknown, hosts: "any" | "ours"): Media[] {
   if (!Array.isArray(value)) return [];
   const allowExternal = hosts === "any" || process.env.ALLOW_EXTERNAL_MEDIA === "1";

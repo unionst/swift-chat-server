@@ -38,9 +38,11 @@ CREATE TABLE IF NOT EXISTS messages (
   text text NOT NULL DEFAULT '',
   media jsonb NOT NULL DEFAULT '[]'::jsonb,
   client_id text,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (conversation_id, seq)
 );
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS data jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS messages_client_key ON messages (conversation_id, client_id) WHERE client_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS reactions (
