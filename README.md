@@ -90,7 +90,7 @@ Add the package in Xcode (File › Add Package Dependencies) or in `Package.swif
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/unionst/swift-chat.git", from: "1.0.7"),
+    .package(url: "https://github.com/unionst/swift-chat.git", from: "1.0.8"),
     .package(url: "https://github.com/unionst/swift-chat-server.git", from: "0.1.0")
 ],
 targets: [

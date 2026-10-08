@@ -13,7 +13,7 @@ let package = Package(
             targets: ["SwiftChatClient"])
     ],
     dependencies: [
-        .package(url: "https://github.com/unionst/swift-chat.git", from: "1.0.7")
+        .package(url: "https://github.com/unionst/swift-chat.git", from: "1.0.8")
     ],
     targets: [
         .target(

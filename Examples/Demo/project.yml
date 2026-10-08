@@ -15,7 +15,7 @@ packages:
     path: ../..
   SwiftChat:
     url: https://github.com/unionst/swift-chat.git
-    from: 1.0.7
+    from: 1.0.8
 targets:
   SwiftChatDemo:
     type: application

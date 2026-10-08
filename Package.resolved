@@ -1,13 +1,13 @@
 {
-  "originHash" : "2fbc9913ef01bc2a3552a4af1e20c17fb86506320904516866bce230b3205ec5",
+  "originHash" : "4d8e78c6a1520c5c7c29adf9aa0cc7303432f1ef7d1d993d5bf32045bda78326",
   "pins" : [
     {
       "identity" : "swift-chat",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/unionst/swift-chat.git",
       "state" : {
-        "revision" : "4a7f37b8b01201c73be9974a2a612a5c8439e7ba",
-        "version" : "1.0.7"
+        "revision" : "9cb656c9b9474b89e1ae47b2c3bb22dc21bbe558",
+        "version" : "1.0.8"
       }
     }
   ],

@@ -20,6 +20,7 @@ public struct ConversationView: View {
             ChatUserAvatar(user: client.user(for: role))
         }
         .chatInputCapabilities([.photoLibrary, .files])
+        .chatHasOlderMessages(client.hasOlderMessages(in: conversationID))
         .chatLoadsOlderMessages { await client.loadOlder(in: conversationID) }
         .chatMessageContextMenu { (id: String) in
             client.contextMenuItems(for: id, in: conversationID)
